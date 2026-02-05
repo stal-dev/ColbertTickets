@@ -21,41 +21,77 @@ function getTransporter() {
   return transporter;
 }
 
+function generateShowHtml(show) {
+  const statusIcon = show.available ? '✅' : '❌';
+  const statusText = show.available ? 'Tickets available!' : 'Not available';
+  const eventCount = show.eventCount || show.dates?.length || 0;
+
+  return `
+    <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; ${show.available ? 'background: #d4edda;' : 'background: #f8f9fa;'}">
+      <h3 style="margin-top: 0;">${statusIcon} ${show.name}</h3>
+      <p><strong>Status:</strong> ${statusText}${eventCount > 0 ? ` (${eventCount} event${eventCount > 1 ? 's' : ''})` : ''}</p>
+      ${show.dates && show.dates.length > 0 ? `
+        <p><strong>Available dates:</strong></p>
+        <ul style="margin: 0; padding-left: 20px;">
+          ${show.dates.slice(0, 10).map(d => `<li style="margin: 4px 0;">${d}</li>`).join('')}
+        </ul>
+      ` : '<p style="color: #666; font-style: italic;">No dates currently listed</p>'}
+      ${show.error ? `<p style="color: red;"><strong>Error:</strong> ${show.error}</p>` : ''}
+      <p style="margin-bottom: 0;"><a href="${show.url}" style="background: #007bff; color: white; padding: 8px 16px; text-decoration: none; border-radius: 5px; display: inline-block;">Request Tickets →</a></p>
+    </div>
+  `;
+}
+
+function generateShowText(show) {
+  const statusText = show.available ? 'AVAILABLE' : 'Not available';
+  const eventCount = show.eventCount || show.dates?.length || 0;
+  const datesText = show.dates && show.dates.length > 0
+    ? show.dates.slice(0, 10).map(d => `  - ${d}`).join('\n')
+    : '  No dates listed';
+
+  return `
+${show.name}
+Status: ${statusText}${eventCount > 0 ? ` (${eventCount} event${eventCount > 1 ? 's' : ''})` : ''}
+${show.error ? `Error: ${show.error}\n` : ''}Dates:
+${datesText}
+Link: ${show.url}
+`;
+}
+
 export async function sendTicketAlert(ticketInfo) {
   const { GMAIL_USER } = process.env;
+
+  const subjectStatus = ticketInfo.available
+    ? `AVAILABLE: ${ticketInfo.availableShows.map(s => s.name).join(', ')}`
+    : 'Status Update';
 
   const mailOptions = {
     from: GMAIL_USER,
     to: GMAIL_USER,
-    subject: `Colbert Tickets Alert: ${ticketInfo.available ? 'AVAILABLE!' : 'Status Update'}`,
+    subject: `1iota Tickets: ${subjectStatus}`,
     html: `
-      <h2>Late Show with Stephen Colbert - Ticket Update</h2>
+      <h2>1iota Ticket Availability Check</h2>
 
-      <p><strong>Status:</strong> ${ticketInfo.available ? '✅ Tickets may be available!' : '❌ No tickets available'}</p>
-
+      <p><strong>Overall Status:</strong> ${ticketInfo.available ? '✅ Tickets may be available!' : '❌ No tickets available'}</p>
       <p><strong>Checked at:</strong> ${ticketInfo.checkedAt}</p>
+      <p><strong>Summary:</strong> ${ticketInfo.message}</p>
 
-      ${ticketInfo.dates && ticketInfo.dates.length > 0 ? `
-        <p><strong>Dates found:</strong></p>
-        <ul>
-          ${ticketInfo.dates.map(d => `<li>${d}</li>`).join('')}
-        </ul>
-      ` : ''}
+      <hr style="margin: 20px 0;">
 
-      <p><strong>Message:</strong> ${ticketInfo.message}</p>
-
-      <p><a href="${ticketInfo.url}" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Check 1iota Now</a></p>
+      <h3>Show Details:</h3>
+      ${ticketInfo.shows.map(generateShowHtml).join('')}
 
       ${ticketInfo.error ? `<p style="color: red;"><strong>Error:</strong> ${ticketInfo.error}</p>` : ''}
     `,
     text: `
-Late Show with Stephen Colbert - Ticket Update
+1iota Ticket Availability Check
 
-Status: ${ticketInfo.available ? 'Tickets may be available!' : 'No tickets available'}
+Overall Status: ${ticketInfo.available ? 'Tickets may be available!' : 'No tickets available'}
 Checked at: ${ticketInfo.checkedAt}
-Message: ${ticketInfo.message}
+Summary: ${ticketInfo.message}
 
-Check here: ${ticketInfo.url}
+--- Show Details ---
+${ticketInfo.shows.map(generateShowText).join('\n')}
     `
   };
 

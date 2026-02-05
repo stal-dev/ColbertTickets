@@ -1,6 +1,195 @@
 import puppeteer from 'puppeteer';
+import { SHOWS } from './config.js';
 
-const TARGET_URL = 'https://1iota.com/show/536/the-late-show-with-stephen-colbert';
+// Parse event text like "Thu, Feb 05 4:15 PM PT Los Angeles, CA 18 +"
+function parseEventInfo(text) {
+  if (!text || typeof text !== 'string') return null;
+
+  // Clean up the text
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+
+  // Match pattern: Day, Mon DD H:MM AM/PM TZ Location, ST Age +
+  const dateMatch = cleaned.match(/^([A-Za-z]{3}),?\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{1,2}:\d{2}\s*[AP]M)\s*([A-Z]{2,3})?\s*(.+?)?\s*(\d+\s*\+)?$/i);
+
+  if (dateMatch) {
+    const [, dayOfWeek, month, day, time, timezone, location, ageReq] = dateMatch;
+    return {
+      dayOfWeek: dayOfWeek,
+      month: month,
+      day: parseInt(day, 10),
+      time: time.trim(),
+      timezone: timezone || '',
+      location: location ? location.trim().replace(/,\s*$/, '') : '',
+      ageRequirement: ageReq ? ageReq.trim() : '',
+      raw: cleaned
+    };
+  }
+
+  // Fallback: just return the cleaned text if we can't parse it
+  return { raw: cleaned };
+}
+
+// Format parsed event for display (concise: day + date only)
+function formatEvent(event) {
+  if (!event) return '';
+  if (!event.dayOfWeek) return event.raw;
+
+  return `${event.dayOfWeek}, ${event.month} ${event.day}`;
+}
+
+// Create unique key for deduplication
+function eventKey(event) {
+  if (!event) return '';
+  if (event.dayOfWeek) {
+    return `${event.month}-${event.day}-${event.time}`;
+  }
+  return event.raw;
+}
+
+async function checkSingleShow(page, show) {
+  console.log(`[${new Date().toISOString()}] Checking ${show.name}...`);
+
+  try {
+    await page.goto(show.url, {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+
+    // Wait for main content to load
+    await page.waitForSelector('body', { timeout: 10000 });
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Collect all events across calendar dates
+    const allEvents = [];
+
+    // Find clickable calendar date elements
+    const calendarDates = await page.$$('[class*="calendar"] [class*="day"], [class*="date-picker"] button, [class*="datepicker"] button, .calendar-day, [data-date]');
+
+    if (calendarDates.length > 0) {
+      console.log(`[${new Date().toISOString()}]   Found ${calendarDates.length} calendar dates to check`);
+
+      for (const dateEl of calendarDates) {
+        try {
+          // Check if the date element is clickable/enabled
+          const isDisabled = await dateEl.evaluate(el => {
+            return el.disabled || el.classList.contains('disabled') || el.getAttribute('aria-disabled') === 'true';
+          });
+
+          if (!isDisabled) {
+            await dateEl.click();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Collect events visible after clicking
+            const events = await page.evaluate(() => {
+              const eventTexts = [];
+              // Look for event cards/rows
+              const eventElements = document.querySelectorAll(
+                '[class*="event-card"], [class*="show-card"], [class*="ticket-row"], ' +
+                '[class*="showtime"], [class*="event-item"], [class*="event-row"]'
+              );
+
+              eventElements.forEach(el => {
+                const text = el.innerText.trim();
+                if (text && text.length > 5 && text.length < 200) {
+                  eventTexts.push(text);
+                }
+              });
+
+              return eventTexts;
+            });
+
+            allEvents.push(...events);
+          }
+        } catch {
+          // Skip unclickable elements
+        }
+      }
+    }
+
+    // Also collect events visible on the initial page view
+    const initialEvents = await page.evaluate(() => {
+      const events = [];
+      const pageText = document.body.innerText.toLowerCase();
+
+      // Look for "Request" buttons which indicate available tickets
+      const hasRequestButton = Array.from(document.querySelectorAll('a, button')).some(btn => {
+        const text = btn.innerText.toLowerCase();
+        return text.includes('request') || text.includes('get tickets') || text.includes('reserve');
+      });
+
+      // Check for no tickets messages
+      const noTicketsIndicators = [
+        'no tickets available',
+        'sold out',
+        'no upcoming shows',
+        'check back later',
+        'no events',
+        'currently no'
+      ];
+      const hasNoTicketsMessage = noTicketsIndicators.some(indicator => pageText.includes(indicator));
+
+      // Find event listings - look for elements with date/time patterns
+      const allElements = document.querySelectorAll('*');
+      const dateTimePattern = /[A-Za-z]{3},?\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{1,2}:\d{2}\s*[AP]M/i;
+
+      allElements.forEach(el => {
+        // Only check leaf nodes or small containers
+        if (el.children.length <= 3) {
+          const text = el.innerText?.trim();
+          if (text && text.length > 10 && text.length < 150 && dateTimePattern.test(text)) {
+            events.push(text);
+          }
+        }
+      });
+
+      return { events, hasRequestButton, hasNoTicketsMessage };
+    });
+
+    allEvents.push(...initialEvents.events);
+
+    // Parse and deduplicate events
+    const parsedEvents = allEvents
+      .map(parseEventInfo)
+      .filter(e => e !== null);
+
+    // Deduplicate by key
+    const seen = new Set();
+    const uniqueEvents = parsedEvents.filter(event => {
+      const key = eventKey(event);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Format for display
+    const formattedDates = uniqueEvents.map(formatEvent);
+
+    // Determine availability
+    const available = (initialEvents.hasRequestButton || uniqueEvents.length > 0) && !initialEvents.hasNoTicketsMessage;
+
+    console.log(`[${new Date().toISOString()}]   Found ${uniqueEvents.length} unique event(s), available: ${available}`);
+
+    return {
+      name: show.name,
+      url: show.url,
+      available,
+      dates: formattedDates,
+      eventCount: uniqueEvents.length,
+      error: null
+    };
+
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error checking ${show.name}:`, error.message);
+    return {
+      name: show.name,
+      url: show.url,
+      available: false,
+      dates: [],
+      eventCount: 0,
+      error: error.message
+    };
+  }
+}
 
 export async function checkTicketAvailability() {
   let browser;
@@ -12,94 +201,34 @@ export async function checkTicketAvailability() {
     });
 
     const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36');
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-    console.log(`[${new Date().toISOString()}] Checking ${TARGET_URL}`);
+    const enabledShows = SHOWS.filter(show => show.enabled);
+    const results = [];
+    for (const show of enabledShows) {
+      const result = await checkSingleShow(page, show);
+      results.push(result);
+    }
 
-    await page.goto(TARGET_URL, {
-      waitUntil: 'networkidle2',
-      timeout: 30000
-    });
-
-    // Wait for main content to load
-    await page.waitForSelector('body', { timeout: 10000 });
-
-    // Give extra time for dynamic content
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Look for ticket availability indicators
-    const result = await page.evaluate(() => {
-      const pageText = document.body.innerText.toLowerCase();
-      const pageHtml = document.body.innerHTML.toLowerCase();
-
-      // Check for "request" buttons or links (indicates tickets available)
-      const requestButtons = document.querySelectorAll('a, button');
-      let hasRequestButton = false;
-      const availableDates = [];
-
-      requestButtons.forEach(btn => {
-        const text = btn.innerText.toLowerCase();
-        if (text.includes('request') || text.includes('get tickets') || text.includes('reserve')) {
-          hasRequestButton = true;
-        }
-      });
-
-      // Look for date listings that might indicate available shows
-      const dateElements = document.querySelectorAll('[class*="date"], [class*="show"], [class*="event"]');
-      dateElements.forEach(el => {
-        const text = el.innerText.trim();
-        if (text && text.length < 100) {
-          availableDates.push(text);
-        }
-      });
-
-      // Check for "no tickets" or "sold out" messages
-      const noTicketsIndicators = [
-        'no tickets available',
-        'sold out',
-        'no upcoming shows',
-        'check back later',
-        'no events'
-      ];
-
-      const hasNoTicketsMessage = noTicketsIndicators.some(indicator =>
-        pageText.includes(indicator)
-      );
-
-      // Check for positive availability indicators
-      const hasAvailabilityIndicators =
-        pageText.includes('request tickets') ||
-        pageText.includes('available') ||
-        hasRequestButton;
-
-      return {
-        hasRequestButton,
-        hasNoTicketsMessage,
-        hasAvailabilityIndicators,
-        availableDates: availableDates.slice(0, 10),
-        pageTextSample: pageText.substring(0, 500)
-      };
-    });
-
-    // Determine if tickets are available
-    const available = result.hasAvailabilityIndicators && !result.hasNoTicketsMessage;
+    const anyAvailable = results.some(r => r.available);
+    const availableShows = results.filter(r => r.available);
 
     return {
-      available,
-      url: TARGET_URL,
-      dates: result.availableDates,
-      details: result,
+      available: anyAvailable,
+      shows: results,
+      availableShows,
       checkedAt: new Date().toISOString(),
-      message: available
-        ? 'Tickets may be available! Check the site.'
-        : 'No tickets currently available.'
+      message: anyAvailable
+        ? `Tickets may be available for: ${availableShows.map(s => s.name).join(', ')}`
+        : 'No tickets currently available for any show.'
     };
 
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Scraper error:`, error.message);
     return {
       available: false,
-      url: TARGET_URL,
+      shows: [],
+      availableShows: [],
       error: error.message,
       checkedAt: new Date().toISOString(),
       message: `Error checking tickets: ${error.message}`
