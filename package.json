@@ -1,0 +1,17 @@
+{
+  "name": "colbert-tickets-checker",
+  "version": "1.0.0",
+  "description": "Checks 1iota.com for Late Show with Stephen Colbert ticket availability",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "check-now": "node src/index.js --check-now"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.13",
+    "puppeteer": "^22.6.0"
+  }
+}
