@@ -1,14 +1,14 @@
 # 1iota Tickets Checker
 
-Automatically checks [1iota.com](https://1iota.com) for TV show ticket availability and sends email notifications via Gmail.
+Automatically checks [1iota.com](https://1iota.com) for TV show ticket availability and sends email notifications via Gmail. Runs on Vercel with hourly cron checks.
 
 ## Shows Monitored
 
 - [The Late Show with Stephen Colbert](https://1iota.com/show/536/the-late-show-with-stephen-colbert)
 - [The Daily Show](https://1iota.com/show/1248/the-daily-show)
-- [Jimmy Kimmel Live](https://1iota.com/show/1/jimmy-kimmel-live)
-- [The Tonight Show Starring Jimmy Fallon](https://1iota.com/show/353/the-tonight-show-starring-jimmy-fallon)
-- [Late Night with Seth Meyers](https://1iota.com/show/461/late-night-with-seth-meyers)
+- [Jimmy Kimmel Live](https://1iota.com/show/1/jimmy-kimmel-live) (disabled by default)
+- [The Tonight Show Starring Jimmy Fallon](https://1iota.com/show/353/the-tonight-show-starring-jimmy-fallon) (disabled by default)
+- [Late Night with Seth Meyers](https://1iota.com/show/461/late-night-with-seth-meyers) (disabled by default)
 
 ## Features
 
@@ -17,22 +17,17 @@ Automatically checks [1iota.com](https://1iota.com) for TV show ticket availabil
   - **Available** ("Request Tickets") - tickets definitely available
   - **Waitlist** ("Join Waitlist") - backlog, maybe available
   - **Closed** ("Registration Closed" / sold out) - no tickets
-- Email notifications with grouped dates by status
-- Web UI and HTTP API for on-demand checks
-- Uses headless Chrome (Puppeteer) to handle JavaScript-rendered pages
+- Email notifications when tickets become available
+- Web UI for manual checks
+- Automatic hourly checks via Vercel Cron
+- Serverless - no server to maintain
 
 ## Prerequisites
 
-- Node.js 18+
+- A [Vercel](https://vercel.com) account (free tier works)
 - A Gmail account with 2-Step Verification enabled
 
-## Installation
-
-```bash
-npm install
-```
-
-## Configuration
+## Deployment
 
 ### 1. Create a Gmail App Password
 
@@ -42,106 +37,67 @@ npm install
 4. Select "Mail" and generate a new app password
 5. Copy the 16-character password
 
-### 2. Create your `.env` file
+### 2. Deploy to Vercel
 
 ```bash
-cp .env.example .env
+# Install dependencies
+npm install
+
+# Deploy
+npx vercel
 ```
 
-Edit `.env` with your credentials:
+Or connect your GitHub repo to Vercel for automatic deployments.
 
-```env
-GMAIL_USER=your.email@gmail.com
-GMAIL_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
-ALWAYS_EMAIL=false
-PORT=3000
-```
+### 3. Configure Environment Variables
 
-### Environment Variables
+In the Vercel dashboard, add these environment variables:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GMAIL_USER` | Yes | Your Gmail address (used for sending and receiving) |
 | `GMAIL_APP_PASSWORD` | Yes | Gmail App Password (not your regular password) |
 | `ALWAYS_EMAIL` | No | Set to `true` to email on every check. Default: `false` |
-| `PORT` | No | HTTP server port. Default: `3000` |
+| `CRON_SECRET` | No | Secret to secure the cron endpoint |
 
 ## Usage
 
-### Option 1: HTTP Server (Web UI + API)
+### Web UI
 
-```bash
-npm run server
-```
+Visit your Vercel deployment URL to access the web interface for manual checks.
 
-Open http://localhost:3000 for the web UI, or trigger checks via URL:
+### API Endpoints
 
 | Endpoint | Description |
 |----------|-------------|
 | `GET /` | Web UI |
-| `GET /api/check` | Check tickets (JSON response) |
-| `GET /api/check-and-email` | Check tickets + send email |
-| `GET /api/status` | Get last cached result |
+| `POST /api/check` | Check tickets (JSON response) |
+| `POST /api/check-and-email` | Check tickets + send email |
+| `/api/cron` | Called automatically every hour by Vercel |
 
-**Direct URL triggers** (bookmarkable, curl-friendly):
-```bash
-# Just check
-curl http://localhost:3000/api/check
+### Automatic Checks
 
-# Check and send email
-curl http://localhost:3000/api/check-and-email
-```
+Vercel Cron runs `/api/cron` every hour. When tickets are available or waitlist opens, you'll receive an email notification.
 
-### Option 2: Single Check (CLI)
+## Local Development
 
 ```bash
-npm run check-now
+npx vercel dev
 ```
 
-Runs one check, prints the result, and exits.
-
-### Option 3: Scheduled Checks (Hourly)
-
-```bash
-npm start
-```
-
-Runs an immediate check on startup, then checks at the top of every hour.
-
-### Keep it running in the background
-
-Using **PM2** (recommended):
-
-```bash
-npm install -g pm2
-
-# HTTP server mode
-pm2 start src/server.js --name 1iota-tickets
-
-# Or scheduled mode
-pm2 start src/index.js --name 1iota-tickets
-
-pm2 logs 1iota-tickets
-pm2 stop 1iota-tickets
-```
-
-Using **nohup**:
-
-```bash
-nohup npm run server > tickets.log 2>&1 &
-```
+This starts the Vercel dev server locally at http://localhost:3000.
 
 ## How It Works
 
-1. **Scraper** - Launches headless Chrome, navigates to each show's 1iota page
-2. **Detection** - Clicks each date tab and checks the button text:
+1. **Scraper** - Launches serverless Chrome via @sparticuz/chromium
+2. **Detection** - Navigates to each show's 1iota page, clicks date tabs, checks button text:
    - "Request Tickets" = available
    - "Join Waitlist" = waitlist (backlog)
    - "Registration Closed" = closed
-3. **Notification** - Sends email when status changes or tickets become available
+3. **Notification** - Sends email when tickets become available or waitlist opens
 4. **Output** - Groups dates by status (Available, Waitlist, Closed) with day of week
 
-## Example Output
+## Example Email
 
 ```
 TICKETS AVAILABLE:
@@ -156,16 +112,31 @@ The Late Show - TICKETS AVAILABLE!
 
 ## Troubleshooting
 
-### "Missing GMAIL_USER or GMAIL_APP_PASSWORD"
-Make sure you created the `.env` file and filled in your credentials.
+### Cold start timeout
+Serverless Chrome has ~15-20 second cold starts. If checks timeout, try again - subsequent requests are faster.
 
 ### Email not sending
 - Verify you're using an **App Password**, not your regular Gmail password
 - Check that 2-Step Verification is enabled on your Google account
+- Verify environment variables are set correctly in Vercel dashboard
 
-### Puppeteer errors
-```bash
-npx puppeteer browsers install chrome
+### Function timeout
+The function timeout is set to 60 seconds in `vercel.json`. On the free tier, this is the maximum. If scraping multiple shows takes longer, consider disabling some shows in `lib/config.js`.
+
+## Project Structure
+
+```
+├── api/
+│   ├── check.js           # Manual ticket check
+│   ├── check-and-email.js # Check + send email
+│   └── cron.js            # Hourly cron endpoint
+├── lib/
+│   ├── config.js          # Show configuration
+│   ├── emailer.js         # Email notifications
+│   └── scraper.js         # Puppeteer scraper
+├── public/
+│   └── index.html         # Web UI
+└── vercel.json            # Cron + function config
 ```
 
 ## License

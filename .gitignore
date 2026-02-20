@@ -3,3 +3,6 @@ node_modules/
 *.log
 sample.html
 sample2.html
+.vercel
+.DS_Store
+package-lock.json

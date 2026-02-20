@@ -1,18 +1,22 @@
 {
   "name": "colbert-tickets-checker",
-  "version": "1.0.0",
-  "description": "Checks 1iota.com for Late Show with Stephen Colbert ticket availability",
-  "main": "src/index.js",
+  "version": "2.0.0",
+  "description": "Checks 1iota.com for Late Show with Stephen Colbert ticket availability (Vercel)",
   "type": "module",
-  "scripts": {
-    "start": "node src/index.js",
-    "check-now": "node src/index.js --check-now",
-    "server": "node src/server.js"
-  },
+  "scripts": {},
   "dependencies": {
+    "@sparticuz/chromium": "^131.0.0",
     "dotenv": "^16.4.5",
-    "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.13",
-    "puppeteer": "^22.6.0"
+    "nodemailer": "^8.0.1",
+    "puppeteer-core": "^23.0.0"
+  },
+  "devDependencies": {
+    "vercel": "^50.22.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "overrides": {
+    "tar": "^7.5.9"
   }
 }
