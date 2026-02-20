@@ -234,7 +234,23 @@
       }
 
       let html = '<p class="timestamp">Checked at: ' + data.checkedAt + '</p>';
-      html += '<p><strong>' + data.message + '</strong></p>';
+      
+      html += '<p><strong>Summary:</strong></p>';
+      html += '<ol style="margin-top: 0;">';
+      (data.shows || []).forEach(show => {
+          let text;
+          if (show.hasAvailable) {
+              text = '<strong>' + show.name + ':</strong> 🎟️ ' + (show.availableDates || []).map(d => d.display || d.date).join(', ');
+          } else if (show.hasWaitlist) {
+              text = '<strong>' + show.name + ':</strong> ⏳ ' + (show.waitlistDates || []).map(d => d.display || d.date).join(', ');
+          } else if (show.error) {
+              text = '<strong>' + show.name + ':</strong> ❌ Error: ' + show.error;
+          } else {
+              text = '<strong>' + show.name + ':</strong> ❌ Not available';
+          }
+          html += '<li>' + text + '</li>';
+      });
+      html += '</ol>';
 
       if (data.shows && data.shows.length > 0) {
         data.shows.forEach(show => {

@@ -7,11 +7,11 @@
   ],
   "functions": {
     "api/check.js": {
-      "maxDuration": 60,
+      "maxDuration": 360,
       "memory": 1024
     },
     "api/cron.js": {
-      "maxDuration": 60,
+      "maxDuration": 360,
       "memory": 1024
     }
   }
