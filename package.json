@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "check-now": "node src/index.js --check-now"
+    "check-now": "node src/index.js --check-now",
+    "server": "node src/server.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

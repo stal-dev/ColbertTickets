@@ -98,16 +98,20 @@ async function checkSingleShow(page, show) {
     });
 
     // For non-sold-out dates, click and check button status
-    const enrichedDates = [];
+    // Use Map to dedupe by normalized date
+    const dateMap = new Map();
+
     for (const date of uniqueDates) {
       const normalized = normalizeDate(date.month, date.day);
 
+      // Skip if we already have this normalized date
+      if (dateMap.has(normalized)) continue;
+
+      // Include day of week if available
+      const display = date.dow ? `${date.dow} ${normalized}` : normalized;
+
       if (date.soldOut) {
-        enrichedDates.push({
-          date: normalized,
-          status: 'sold_out',
-          display: normalized
-        });
+        dateMap.set(normalized, { date: normalized, display, status: 'sold_out' });
         continue;
       }
 
@@ -138,20 +142,14 @@ async function checkSingleShow(page, show) {
           return 'unknown';
         });
 
-        enrichedDates.push({
-          date: normalized,
-          status: buttonStatus,
-          display: normalized
-        });
+        dateMap.set(normalized, { date: normalized, display, status: buttonStatus });
 
       } catch {
-        enrichedDates.push({
-          date: normalized,
-          status: 'unknown',
-          display: normalized
-        });
+        dateMap.set(normalized, { date: normalized, display, status: 'unknown' });
       }
     }
+
+    const enrichedDates = Array.from(dateMap.values());
 
     // Categorize dates by status
     const availableDates = enrichedDates.filter(d => d.status === 'available');
@@ -214,15 +212,13 @@ export async function checkTicketAvailability() {
 
     let message;
     if (showsWithAvailable.length > 0) {
-      const availInfo = showsWithAvailable.map(s =>
-        `${s.name}: ${s.availableDates.map(d => d.date).join(', ')}`
-      ).join('; ');
-      message = `TICKETS AVAILABLE: ${availInfo}`;
+      message = showsWithAvailable.map(s =>
+        `• ${s.name}: ${s.availableDates.map(d => d.display || d.date).join(', ')}`
+      ).join('\n');
     } else if (showsWithWaitlist.length > 0) {
-      const waitlistInfo = showsWithWaitlist.map(s =>
-        `${s.name}: ${s.waitlistDates.map(d => d.date).join(', ')}`
-      ).join('; ');
-      message = `Waitlist open: ${waitlistInfo}`;
+      message = showsWithWaitlist.map(s =>
+        `• ${s.name}: ${s.waitlistDates.map(d => d.display || d.date).join(', ')}`
+      ).join('\n');
     } else {
       message = 'No tickets currently available for any show.';
     }

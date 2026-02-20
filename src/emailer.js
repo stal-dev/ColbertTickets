@@ -40,46 +40,28 @@ function generateShowHtml(show) {
     bgColor = '#f8f9fa';
   }
 
-  const availableCount = show.availableDates?.length || 0;
-  const waitlistCount = show.waitlistDates?.length || 0;
-  const totalCount = show.totalCount || show.dates?.length || 0;
-
-  const formatDateHtml = (d) => {
-    if (typeof d === 'string') return `<li style="margin: 4px 0;">${d}</li>`;
-    let icon, style;
-    switch (d.status) {
-      case 'available':
-        icon = '🎟️';
-        style = 'color: #28a745; font-weight: bold;';
-        break;
-      case 'waitlist':
-        icon = '⏳';
-        style = 'color: #856404;';
-        break;
-      case 'sold_out':
-      case 'closed':
-        icon = '❌';
-        style = 'color: #999;';
-        break;
-      default:
-        icon = '❓';
-        style = 'color: #666;';
-    }
-    return `<li style="margin: 4px 0; ${style}">${icon} ${d.date} (${d.status})</li>`;
+  // Format dates as list items
+  const formatDates = (dates, icon, color) => {
+    if (!dates?.length) return '';
+    return dates.map(d =>
+      `<li style="color: ${color};">${icon} ${d.display || d.date}</li>`
+    ).join('');
   };
 
+  const availableList = formatDates(show.availableDates, '🎟️', '#28a745');
+  const waitlistList = formatDates(show.waitlistDates, '⏳', '#856404');
+  const closedList = formatDates(show.closedDates, '❌', '#999');
+
   return `
-    <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: ${bgColor};">
-      <h3 style="margin-top: 0;">${statusIcon} ${show.name}</h3>
-      <p><strong>Status:</strong> ${statusText} (${availableCount} available, ${waitlistCount} waitlist, ${totalCount} total)</p>
-      ${show.dates && show.dates.length > 0 ? `
-        <p><strong>All dates:</strong></p>
-        <ul style="margin: 0; padding-left: 20px; list-style: none;">
-          ${show.dates.map(formatDateHtml).join('')}
-        </ul>
-      ` : '<p style="color: #666; font-style: italic;">No dates currently listed</p>'}
-      ${show.error ? `<p style="color: red;"><strong>Error:</strong> ${show.error}</p>` : ''}
-      <p style="margin-bottom: 0;"><a href="${show.url}" style="background: #007bff; color: white; padding: 8px 16px; text-decoration: none; border-radius: 5px; display: inline-block;">Go to Show →</a></p>
+    <div style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 12px; background: ${bgColor};">
+      <strong>${statusIcon} ${show.name}</strong> - ${statusText}
+      <ul style="margin: 8px 0; padding-left: 20px; list-style: none;">
+        ${availableList}
+        ${waitlistList}
+        ${closedList}
+      </ul>
+      ${show.error ? `<span style="color: red;">Error: ${show.error}</span><br>` : ''}
+      <a href="${show.url}" style="color: #007bff;">Open in 1iota →</a>
     </div>
   `;
 }
@@ -94,32 +76,22 @@ function generateShowText(show) {
     statusText = 'Not available';
   }
 
-  const availableCount = show.availableDates?.length || 0;
-  const waitlistCount = show.waitlistDates?.length || 0;
-  const totalCount = show.totalCount || show.dates?.length || 0;
+  let lines = [`${show.name} - ${statusText}`];
 
-  const formatDateText = (d) => {
-    if (typeof d === 'string') return `  - ${d}`;
-    const statusLabel = {
-      'available': '[AVAILABLE]',
-      'waitlist': '[WAITLIST]',
-      'sold_out': '[SOLD OUT]',
-      'closed': '[CLOSED]'
-    }[d.status] || '[UNKNOWN]';
-    return `  ${statusLabel} ${d.date}`;
-  };
+  // List each date with its status
+  const allDates = [
+    ...(show.availableDates || []).map(d => `  🎟️ ${d.display || d.date}`),
+    ...(show.waitlistDates || []).map(d => `  ⏳ ${d.display || d.date}`),
+    ...(show.closedDates || []).map(d => `  ❌ ${d.display || d.date}`)
+  ];
 
-  const datesText = show.dates && show.dates.length > 0
-    ? show.dates.map(formatDateText).join('\n')
-    : '  No dates listed';
+  if (allDates.length > 0) {
+    lines.push(...allDates);
+  }
+  if (show.error) lines.push(`  Error: ${show.error}`);
+  lines.push(`  ${show.url}`);
 
-  return `
-${show.name}
-Status: ${statusText} (${availableCount} available, ${waitlistCount} waitlist, ${totalCount} total)
-${show.error ? `Error: ${show.error}\n` : ''}Dates:
-${datesText}
-Link: ${show.url}
-`;
+  return lines.join('\n');
 }
 
 export async function sendTicketAlert(ticketInfo) {

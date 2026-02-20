@@ -51,7 +51,7 @@ async function runCheck() {
 
 async function main() {
   console.log('='.repeat(50));
-  console.log(' Colbert Tickets Checker');
+  console.log(' 1iota Tickets Checker');
   console.log('='.repeat(50));
   console.log(`Mode: ${CHECK_NOW ? 'Single check' : 'Scheduled (hourly)'}`);
   console.log(`Always email: ${ALWAYS_EMAIL ? 'Yes' : 'No (only on availability)'}`);
