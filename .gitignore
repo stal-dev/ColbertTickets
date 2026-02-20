@@ -6,3 +6,4 @@ sample2.html
 .vercel
 .DS_Store
 package-lock.json
+.env*.local
