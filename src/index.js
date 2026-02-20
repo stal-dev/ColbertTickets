@@ -7,7 +7,7 @@ const CHECK_NOW = process.argv.includes('--check-now');
 const ALWAYS_EMAIL = process.env.ALWAYS_EMAIL === 'true';
 
 // Track last known availability to avoid spam
-let lastAvailabilityStatus = null;
+let lastStatus = { hasAvailable: false, hasWaitlist: false };
 
 async function runCheck() {
   console.log(`\n${'='.repeat(50)}`);
@@ -15,23 +15,36 @@ async function runCheck() {
 
   const result = await checkTicketAvailability();
 
-  console.log(`[${new Date().toISOString()}] Result: ${result.available ? 'AVAILABLE' : 'Not available'}`);
+  let statusText;
+  if (result.hasAvailable) {
+    statusText = 'TICKETS AVAILABLE';
+  } else if (result.hasWaitlist) {
+    statusText = 'WAITLIST OPEN';
+  } else {
+    statusText = 'Not available';
+  }
+  console.log(`[${new Date().toISOString()}] Result: ${statusText}`);
 
   // Send email if:
   // 1. ALWAYS_EMAIL is enabled, OR
-  // 2. Tickets are available (always notify), OR
-  // 3. Status changed from available to not available
-  const statusChanged = lastAvailabilityStatus !== null && lastAvailabilityStatus !== result.available;
-  const shouldEmail = ALWAYS_EMAIL || result.available || (statusChanged && lastAvailabilityStatus === true);
+  // 2. Tickets are available (always notify - high priority), OR
+  // 3. Waitlist opened (notify once), OR
+  // 4. Status changed from available to not available
+  const availabilityChanged = lastStatus.hasAvailable !== result.hasAvailable;
+  const waitlistChanged = lastStatus.hasWaitlist !== result.hasWaitlist;
+  const shouldEmail = ALWAYS_EMAIL ||
+    result.hasAvailable ||
+    (result.hasWaitlist && waitlistChanged) ||
+    (availabilityChanged && lastStatus.hasAvailable);
 
   if (shouldEmail) {
     console.log(`[${new Date().toISOString()}] Sending notification email...`);
     await sendTicketAlert(result);
   } else {
-    console.log(`[${new Date().toISOString()}] No email needed (status unchanged: not available)`);
+    console.log(`[${new Date().toISOString()}] No email needed (status unchanged)`);
   }
 
-  lastAvailabilityStatus = result.available;
+  lastStatus = { hasAvailable: result.hasAvailable, hasWaitlist: result.hasWaitlist };
 
   return result;
 }
