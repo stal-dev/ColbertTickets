@@ -3,25 +3,18 @@
   "version": "2.0.0",
   "description": "Checks 1iota.com for Late Show with Stephen Colbert ticket availability (Vercel)",
   "type": "module",
-  "scripts": {
-    "postinstall": "node scripts/postinstall.mjs"
-  },
+  "scripts": {},
   "dependencies": {
     "@sparticuz/chromium-min": "^141.0.0",
     "@vercel/blob": "^0.27.0",
     "dotenv": "^16.4.5",
     "nodemailer": "^8.0.1",
-    "puppeteer-core": "^23.11.0",
-    "tar-fs": "^3.0.6"
+    "puppeteer-core": "^23.11.0"
   },
   "devDependencies": {
-    "@sparticuz/chromium": "^141.0.0",
     "vercel": "^50.22.0"
   },
   "engines": {
     "node": ">=18"
-  },
-  "overrides": {
-    "tar": "^7.5.9"
   }
 }
