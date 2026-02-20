@@ -47,7 +47,7 @@ export default async function handler(req, res) {
         nodeVersion: process.version,
         hasGmailUser: !!process.env.GMAIL_USER,
         hasGmailPassword: !!process.env.GMAIL_APP_PASSWORD,
-        hasBlobToken: !!process.env.BLOB_READ_WRITE_TOKEN,
+        hasBlobToken: !!process.env.COLBERT_TICKETS_READ_WRITE_TOKEN,
         alwaysEmail: process.env.ALWAYS_EMAIL || 'false'
       }
     });
