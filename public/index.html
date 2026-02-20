@@ -380,6 +380,7 @@
                   <th>Time</th>
                   <th>Status</th>
                   <th>Email</th>
+                  <th>Counts</th>
                   <th>Shows</th>
                 </tr>
               </thead>
@@ -398,6 +399,11 @@
               ? `<span class="badge badge-success" title="${run.emailReason || ''}">Sent</span>` 
               : `<span class="badge badge-secondary" title="${run.emailReason || ''}">Not Sent</span>`;
 
+            let counts = '-';
+            if (run.totalShows !== undefined) {
+              counts = `S:${run.totalShows} | A:${run.totalAvailable || 0} | W:${run.totalWaitlist || 0}`;
+            }
+
             const showSummary = (run.summary || [])
               .map(s => s.name.replace('The Late Show with Stephen Colbert', 'Late Show'))
               .join(', ') || '-';
@@ -409,6 +415,7 @@
                 <td>${time}</td>
                 <td>${badge}</td>
                 <td>${emailBadge}</td>
+                <td style="white-space: nowrap;">${counts}</td>
                 <td>${showSummary}</td>
               </tr>
             `;
