@@ -1,4 +1,5 @@
 import { checkTicketAvailability } from '../lib/scraper.js';
+import { saveState, createStateKey } from '../lib/state.js';
 
 export default async function handler(req, res) {
   // CORS headers
@@ -13,6 +14,11 @@ export default async function handler(req, res) {
   try {
     console.log('Starting ticket check...');
     const result = await checkTicketAvailability();
+
+    // Always save state after check (to track current state and history)
+    const stateKey = createStateKey(result);
+    await saveState(stateKey, result);
+
     return res.status(200).json(result);
   } catch (error) {
     console.error('Check error:', error);

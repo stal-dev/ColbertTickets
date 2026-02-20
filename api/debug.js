@@ -1,7 +1,4 @@
-import { list, head } from '@vercel/blob';
-import { getRunHistory } from '../lib/state.js';
-
-const STATE_BLOB_NAME = 'ticket-checker-state.json';
+import { listStorage, getPreviousState, getRunHistory } from '../lib/state.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,21 +11,10 @@ export default async function handler(req, res) {
 
   try {
     // Get current state
-    let currentState = null;
-    try {
-      const blobInfo = await head(STATE_BLOB_NAME);
-      if (blobInfo) {
-        const response = await fetch(blobInfo.url);
-        if (response.ok) {
-          currentState = await response.json();
-        }
-      }
-    } catch (e) {
-      currentState = { error: e.message };
-    }
+    const currentState = await getPreviousState();
 
-    // List all blobs in storage
-    const { blobs } = await list();
+    // List all blobs/files in storage
+    const { blobs } = await listStorage();
 
     const blobSummary = blobs.map(blob => ({
       pathname: blob.pathname,
@@ -38,7 +24,7 @@ export default async function handler(req, res) {
     }));
 
     // Calculate storage stats
-    const totalSize = blobs.reduce((sum, b) => sum + b.size, 0);
+    const totalSizeBytes = blobs.reduce((sum, b) => sum + (b.size || 0), 0);
 
     // Get run history
     const runHistory = await getRunHistory();
@@ -48,8 +34,8 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString(),
       storage: {
         totalBlobs: blobs.length,
-        totalSizeBytes: totalSize,
-        totalSizeKB: (totalSize / 1024).toFixed(2)
+        totalSizeBytes: totalSizeBytes,
+        totalSizeKB: (totalSizeBytes / 1024).toFixed(2)
       },
       currentState,
       runHistory: {
@@ -69,7 +55,7 @@ export default async function handler(req, res) {
     console.error('Debug error:', error);
     return res.status(500).json({
       error: error.message,
-      hint: 'Make sure BLOB_READ_WRITE_TOKEN is configured'
+      hint: 'Check if storage is accessible'
     });
   }
 }
