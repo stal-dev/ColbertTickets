@@ -70,6 +70,64 @@
       margin-top: 10px;
       font-size: 14px;
     }
+    .btn-secondary { background: #6c757d; color: white; }
+    .debug-section { margin-top: 30px; }
+    .debug-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    .debug-header h3 { margin: 0; }
+    .debug-content { display: none; margin-top: 15px; }
+    .debug-content.open { display: block; }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .stat-box {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .stat-value { font-size: 24px; font-weight: bold; color: #333; }
+    .stat-label { font-size: 12px; color: #666; margin-top: 4px; }
+    .env-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin: 2px;
+    }
+    .env-ok { background: #d4edda; color: #155724; }
+    .env-missing { background: #f8d7da; color: #721c24; }
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    .history-table th, .history-table td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    .history-table th { background: #f8f9fa; font-weight: 600; }
+    .history-table tr:hover { background: #f8f9fa; }
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+    .badge-success { background: #d4edda; color: #155724; }
+    .badge-warning { background: #fff3cd; color: #856404; }
+    .badge-secondary { background: #e9ecef; color: #495057; }
+    .toggle-icon { font-size: 18px; transition: transform 0.2s; }
+    .toggle-icon.open { transform: rotate(180deg); }
   </style>
 </head>
 <body>
@@ -94,6 +152,22 @@
   <div class="card">
     <h3>Results</h3>
     <div id="results">Click a button to check ticket availability...</div>
+  </div>
+
+  <div class="card debug-section">
+    <div class="debug-header" onclick="toggleDebug()">
+      <h3>Debug Info</h3>
+      <span class="toggle-icon" id="debugToggle">&#9660;</span>
+    </div>
+    <div class="debug-content" id="debugContent">
+      <button class="btn btn-secondary" id="btnDebug" onclick="loadDebug()">
+        Load Debug Info
+      </button>
+
+      <div id="debugStats" style="margin-top: 15px;"></div>
+      <div id="debugEnv" style="margin-top: 15px;"></div>
+      <div id="debugHistory" style="margin-top: 15px;"></div>
+    </div>
   </div>
 
   <script>
@@ -198,6 +272,138 @@
       }
 
       resultsEl.innerHTML = html;
+    }
+
+    function toggleDebug() {
+      const content = document.getElementById('debugContent');
+      const icon = document.getElementById('debugToggle');
+      content.classList.toggle('open');
+      icon.classList.toggle('open');
+    }
+
+    async function loadDebug() {
+      const btnDebug = document.getElementById('btnDebug');
+      const statsEl = document.getElementById('debugStats');
+      const envEl = document.getElementById('debugEnv');
+      const historyEl = document.getElementById('debugHistory');
+
+      btnDebug.disabled = true;
+      btnDebug.textContent = 'Loading...';
+      statsEl.innerHTML = '';
+      envEl.innerHTML = '';
+      historyEl.innerHTML = '';
+
+      try {
+        const response = await fetch('/api/debug');
+        const data = await response.json();
+
+        if (!response.ok) {
+          statsEl.innerHTML = '<p style="color:red">Error: ' + (data.error || 'Failed to load') + '</p>';
+          if (data.hint) statsEl.innerHTML += '<p>' + data.hint + '</p>';
+          return;
+        }
+
+        // Storage stats
+        statsEl.innerHTML = `
+          <h4>Storage</h4>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-value">${data.storage.totalBlobs}</div>
+              <div class="stat-label">Blobs</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value">${data.storage.totalSizeKB}</div>
+              <div class="stat-label">KB Used</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value">${data.runHistory.totalRuns}</div>
+              <div class="stat-label">Runs Logged</div>
+            </div>
+          </div>
+        `;
+
+        // Environment
+        const env = data.environment;
+        envEl.innerHTML = `
+          <h4>Environment</h4>
+          <div>
+            <span class="env-badge ${env.hasBlobToken ? 'env-ok' : 'env-missing'}">
+              ${env.hasBlobToken ? 'Blob Token OK' : 'Blob Token Missing'}
+            </span>
+            <span class="env-badge ${env.hasGmailUser ? 'env-ok' : 'env-missing'}">
+              ${env.hasGmailUser ? 'Gmail User OK' : 'Gmail User Missing'}
+            </span>
+            <span class="env-badge ${env.hasGmailPassword ? 'env-ok' : 'env-missing'}">
+              ${env.hasGmailPassword ? 'Gmail Password OK' : 'Gmail Password Missing'}
+            </span>
+            <span class="env-badge ${env.alwaysEmail === 'true' ? 'env-ok' : 'badge-secondary'}">
+              Always Email: ${env.alwaysEmail}
+            </span>
+          </div>
+        `;
+
+        // Current state
+        if (data.currentState && !data.currentState.error) {
+          statsEl.innerHTML += `
+            <h4>Current State</h4>
+            <div class="stat-box" style="text-align: left;">
+              <p><strong>Last Check:</strong> ${data.currentState.checkedAt || 'N/A'}</p>
+              <p><strong>Has Available:</strong> ${data.currentState.hasAvailable ? 'Yes' : 'No'}</p>
+              <p><strong>Has Waitlist:</strong> ${data.currentState.hasWaitlist ? 'Yes' : 'No'}</p>
+            </div>
+          `;
+        }
+
+        // Run history
+        if (data.runHistory.runs.length > 0) {
+          let tableHtml = `
+            <h4>Run History (Last ${data.runHistory.runs.length})</h4>
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Status</th>
+                  <th>Shows</th>
+                </tr>
+              </thead>
+              <tbody>
+          `;
+
+          data.runHistory.runs.forEach(run => {
+            let badge = '<span class="badge badge-secondary">None</span>';
+            if (run.hasAvailable) {
+              badge = '<span class="badge badge-success">Available</span>';
+            } else if (run.hasWaitlist) {
+              badge = '<span class="badge badge-warning">Waitlist</span>';
+            }
+
+            const showSummary = (run.summary || [])
+              .map(s => s.name.replace('The Late Show with Stephen Colbert', 'Late Show'))
+              .join(', ') || '-';
+
+            const time = new Date(run.checkedAt).toLocaleString();
+
+            tableHtml += `
+              <tr>
+                <td>${time}</td>
+                <td>${badge}</td>
+                <td>${showSummary}</td>
+              </tr>
+            `;
+          });
+
+          tableHtml += '</tbody></table>';
+          historyEl.innerHTML = tableHtml;
+        } else {
+          historyEl.innerHTML = '<p>No run history yet. History will appear after the first check.</p>';
+        }
+
+      } catch (error) {
+        statsEl.innerHTML = '<p style="color:red">Failed to load debug info: ' + error.message + '</p>';
+      } finally {
+        btnDebug.disabled = false;
+        btnDebug.textContent = 'Refresh Debug Info';
+      }
     }
   </script>
 </body>
