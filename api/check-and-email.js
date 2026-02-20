@@ -19,7 +19,10 @@ export default async function handler(req, res) {
 
     // Always save state after check (to track current state and history)
     const stateKey = createStateKey(result);
-    await saveState(stateKey, result);
+    await saveState(stateKey, result, {
+      sent: !!emailResult,
+      reason: emailResult ? 'Manual check with email' : 'Manual check email failed'
+    });
 
     return res.status(200).json({
       ...result,

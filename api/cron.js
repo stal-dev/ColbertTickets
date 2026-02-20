@@ -29,7 +29,10 @@ export default async function handler(req, res) {
 
     // Always save state after check (to track current state)
     const stateKey = createStateKey(result);
-    await saveState(stateKey, result);
+    await saveState(stateKey, result, {
+      sent: emailDecision.shouldEmail,
+      reason: emailDecision.reason
+    });
 
     return res.status(200).json({
       ...result,

@@ -379,6 +379,7 @@
                 <tr>
                   <th>Time</th>
                   <th>Status</th>
+                  <th>Email</th>
                   <th>Shows</th>
                 </tr>
               </thead>
@@ -393,6 +394,10 @@
               badge = '<span class="badge badge-warning">Waitlist</span>';
             }
 
+            let emailBadge = run.emailSent 
+              ? `<span class="badge badge-success" title="${run.emailReason || ''}">Sent</span>` 
+              : `<span class="badge badge-secondary" title="${run.emailReason || ''}">Not Sent</span>`;
+
             const showSummary = (run.summary || [])
               .map(s => s.name.replace('The Late Show with Stephen Colbert', 'Late Show'))
               .join(', ') || '-';
@@ -403,6 +408,7 @@
               <tr>
                 <td>${time}</td>
                 <td>${badge}</td>
+                <td>${emailBadge}</td>
                 <td>${showSummary}</td>
               </tr>
             `;
